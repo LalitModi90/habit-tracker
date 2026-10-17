@@ -1,0 +1,12 @@
+{
+  "expo": {
+    "name": "Habit Tracker",
+    "slug": "habit-tracker-basic",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "scheme": "habittracker",
+    "plugins": ["expo-router"],
+    "experiments": { "typedRoutes": true }
+  }
+}
