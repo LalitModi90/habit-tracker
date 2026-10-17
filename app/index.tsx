@@ -319,21 +319,7 @@ export default function HomeScreen() {
 
   // Delete Habit
   function deleteHabit(habit: Habit) {
-    if (Platform.OS === "web") {
-      const ok = window.confirm(`Remove "${habit.name}" from your tracker?`);
-      if (ok) {
-        setHabits((current) => current.filter((h) => h.id !== habit.id));
-      }
-    } else {
-      Alert.alert("Delete habit?", `Remove "${habit.name}" from your tracker?`, [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Delete",
-          style: "destructive",
-          onPress: () => setHabits((current) => current.filter((h) => h.id !== habit.id)),
-        },
-      ]);
-    }
+    setHabits((current) => current.filter((h) => h.id !== habit.id));
   }
 
   // Calendar Modal Grid Builder
@@ -842,11 +828,14 @@ export default function HomeScreen() {
 
             <TouchableOpacity
               style={styles.actionMenuItem}
+              activeOpacity={0.7}
               onPress={() => {
                 if (actionMenuHabit) {
                   const target = actionMenuHabit;
                   setActionMenuHabit(null);
-                  openEdit(target);
+                  setTimeout(() => {
+                    openEdit(target);
+                  }, 120);
                 }
               }}
             >
@@ -858,11 +847,12 @@ export default function HomeScreen() {
 
             <TouchableOpacity
               style={styles.actionMenuItem}
+              activeOpacity={0.7}
               onPress={() => {
                 if (actionMenuHabit) {
-                  const target = actionMenuHabit;
+                  const targetId = actionMenuHabit.id;
                   setActionMenuHabit(null);
-                  deleteHabit(target);
+                  setHabits((current) => current.filter((h) => h.id !== targetId));
                 }
               }}
             >
