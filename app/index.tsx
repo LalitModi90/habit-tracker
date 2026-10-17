@@ -54,6 +54,7 @@ export default function HomeScreen() {
   const [selectedIcon, setSelectedIcon] = useState<(typeof ICONS)[number]>("book-outline");
   const [selectedColor, setSelectedColor] = useState(COLORS[0]);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [actionMenuHabit, setActionMenuHabit] = useState<Habit | null>(null);
 
   const today = dateKey();
 
@@ -142,14 +143,21 @@ export default function HomeScreen() {
   }
 
   function deleteHabit(habit: Habit) {
-    Alert.alert("Delete habit?", `Remove "${habit.name}" from your tracker?`, [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Delete",
-        style: "destructive",
-        onPress: () => setHabits((current) => current.filter((item) => item.id !== habit.id)),
-      },
-    ]);
+    if (Platform.OS === "web") {
+      const confirmed = window.confirm(`Remove "${habit.name}" from your tracker?`);
+      if (confirmed) {
+        setHabits((current) => current.filter((item) => item.id !== habit.id));
+      }
+    } else {
+      Alert.alert("Delete habit?", `Remove "${habit.name}" from your tracker?`, [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: () => setHabits((current) => current.filter((item) => item.id !== habit.id)),
+        },
+      ]);
+    }
   }
 
   return (
@@ -252,14 +260,13 @@ export default function HomeScreen() {
                     >
                       <Ionicons name={done ? "checkmark" : "checkmark-outline"} size={20} color={done ? "#FFFFFF" : "#9296AA"} />
                     </TouchableOpacity>
-                    <TouchableOpacity style={styles.moreButton} onPress={() => {
-                      Alert.alert(item.name, "Choose an action", [
-                        { text: "Cancel", style: "cancel" },
-                        { text: "Edit", onPress: () => openEdit(item) },
-                        { text: "Delete", style: "destructive", onPress: () => deleteHabit(item) },
-                      ]);
-                    }} accessibilityLabel={`Options for ${item.name}`}>
-                      <Ionicons name="ellipsis-vertical" size={18} color="#858AA0" />
+                    <TouchableOpacity
+                      style={styles.moreButton}
+                      hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                      onPress={() => setActionMenuHabit(item)}
+                      accessibilityLabel={`Options for ${item.name}`}
+                    >
+                      <Ionicons name="ellipsis-vertical" size={19} color="#858AA0" />
                     </TouchableOpacity>
                   </View>
                 );
@@ -338,6 +345,67 @@ export default function HomeScreen() {
           </KeyboardAvoidingView>
         </View>
       </Modal>
+
+      {/* Action Menu Modal for Edit / Delete */}
+      <Modal
+        visible={actionMenuHabit !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setActionMenuHabit(null)}
+      >
+        <TouchableOpacity
+          style={styles.actionModalBackdrop}
+          activeOpacity={1}
+          onPress={() => setActionMenuHabit(null)}
+        >
+          <View style={styles.actionModalCard}>
+            <View style={styles.actionModalHandle} />
+            <Text style={styles.actionModalTitle} numberOfLines={1}>
+              {actionMenuHabit?.name}
+            </Text>
+            <Text style={styles.actionModalSubtitle}>Choose an action</Text>
+
+            <TouchableOpacity
+              style={styles.actionMenuItem}
+              onPress={() => {
+                if (actionMenuHabit) {
+                  const target = actionMenuHabit;
+                  setActionMenuHabit(null);
+                  openEdit(target);
+                }
+              }}
+            >
+              <View style={[styles.actionMenuIconWrap, { backgroundColor: "#EAE8FF" }]}>
+                <Ionicons name="pencil" size={18} color="#6657E8" />
+              </View>
+              <Text style={styles.actionMenuText}>Edit habit</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.actionMenuItem}
+              onPress={() => {
+                if (actionMenuHabit) {
+                  const target = actionMenuHabit;
+                  setActionMenuHabit(null);
+                  deleteHabit(target);
+                }
+              }}
+            >
+              <View style={[styles.actionMenuIconWrap, { backgroundColor: "#FFEAEF" }]}>
+                <Ionicons name="trash-outline" size={18} color="#E34D67" />
+              </View>
+              <Text style={[styles.actionMenuText, { color: "#E34D67" }]}>Delete habit</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.actionMenuCancelButton}
+              onPress={() => setActionMenuHabit(null)}
+            >
+              <Text style={styles.actionMenuCancelText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -407,4 +475,74 @@ const styles = StyleSheet.create({
   colorChoiceSelected: { borderColor: "#34364C", transform: [{ scale: 1.13 }] },
   saveButton: { backgroundColor: "#6657E8", borderRadius: 14, paddingVertical: 15, alignItems: "center" },
   saveButtonText: { color: "#FFFFFF", fontSize: 14, fontWeight: "800" },
+  actionModalBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(24, 26, 45, 0.45)",
+    justifyContent: "flex-end",
+    alignItems: "center",
+  },
+  actionModalCard: {
+    width: "100%",
+    maxWidth: 500,
+    backgroundColor: "#FFFFFF",
+    borderTopLeftRadius: 26,
+    borderTopRightRadius: 26,
+    paddingHorizontal: 22,
+    paddingTop: 12,
+    paddingBottom: Platform.OS === "ios" ? 38 : 26,
+    alignItems: "stretch",
+  },
+  actionModalHandle: {
+    width: 38,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: "#E2E4ED",
+    alignSelf: "center",
+    marginBottom: 16,
+  },
+  actionModalTitle: {
+    fontSize: 18,
+    fontWeight: "800",
+    color: "#252840",
+    textAlign: "center",
+  },
+  actionModalSubtitle: {
+    fontSize: 12,
+    color: "#8C91A5",
+    textAlign: "center",
+    marginBottom: 18,
+    marginTop: 3,
+  },
+  actionMenuItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#F7F7FB",
+    borderRadius: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    marginBottom: 10,
+  },
+  actionMenuIconWrap: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 14,
+  },
+  actionMenuText: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#2E324A",
+  },
+  actionMenuCancelButton: {
+    paddingVertical: 14,
+    alignItems: "center",
+    marginTop: 4,
+  },
+  actionMenuCancelText: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#8B90A2",
+  },
 });
