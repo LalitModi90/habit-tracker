@@ -616,30 +616,44 @@ export default function HomeScreen() {
         animationType="slide"
         onRequestClose={() => setModalVisible(false)}
       >
-        <View style={styles.modalBackdrop}>
-          <KeyboardAvoidingView
-            behavior={Platform.OS === "ios" ? "padding" : undefined}
-            style={styles.modalKeyboard}
-          >
-            <View style={styles.modalCard}>
-              <View style={styles.modalHeader}>
-                <View>
-                  <Text style={styles.modalTitle}>
-                    {editingId ? "Edit habit" : "New habit"}
-                  </Text>
-                  <Text style={styles.modalSubtitle}>
-                    Choose days and settings for your habit.
-                  </Text>
-                </View>
-                <TouchableOpacity
-                  onPress={() => setModalVisible(false)}
-                  style={styles.closeButton}
-                >
-                  <Ionicons name="close" size={22} color="#4C5066" />
-                </TouchableOpacity>
-              </View>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          style={styles.modalOverlayContainer}
+        >
+          {/* Tapping backdrop dismisses modal */}
+          <TouchableOpacity
+            style={styles.modalBackdropTapArea}
+            activeOpacity={1}
+            onPress={() => setModalVisible(false)}
+          />
 
-              <ScrollView showsVerticalScrollIndicator={false} style={styles.modalFormScroll}>
+          <View style={styles.modalCard}>
+            <View style={styles.actionModalHandle} />
+
+            <View style={styles.modalHeader}>
+              <View>
+                <Text style={styles.modalTitle}>
+                  {editingId ? "Edit habit" : "New habit"}
+                </Text>
+                <Text style={styles.modalSubtitle}>
+                  Choose days and settings for your habit.
+                </Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => setModalVisible(false)}
+                style={styles.closeButton}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <Ionicons name="close" size={20} color="#4C5066" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              style={styles.modalFormScroll}
+              contentContainerStyle={styles.modalFormScrollContent}
+              keyboardShouldPersistTaps="handled"
+            >
                 <Text style={styles.inputLabel}>HABIT NAME</Text>
                 <TextInput
                   style={styles.nameInput}
@@ -789,19 +803,23 @@ export default function HomeScreen() {
                   ))}
                 </View>
 
+              </ScrollView>
+
+              {/* STICKY SAVE BUTTON */}
+              <View style={styles.modalBottomSticky}>
                 <TouchableOpacity
                   style={[styles.saveButton, { backgroundColor: selectedColor }]}
                   onPress={saveHabit}
+                  activeOpacity={0.85}
                 >
                   <Text style={styles.saveButtonText}>
                     {editingId ? "Save changes" : "Create habit"}
                   </Text>
                 </TouchableOpacity>
-              </ScrollView>
+              </View>
             </View>
           </KeyboardAvoidingView>
-        </View>
-      </Modal>
+        </Modal>
 
       {/* ACTION MENU MODAL (EDIT / DELETE) */}
       <Modal
@@ -1287,23 +1305,33 @@ const styles = StyleSheet.create({
   },
 
   /* MODALS */
-  modalBackdrop: {
+  modalOverlayContainer: {
     flex: 1,
-    backgroundColor: "rgba(24, 26, 45, 0.42)",
+    backgroundColor: "rgba(20, 22, 38, 0.48)",
     justifyContent: "flex-end",
   },
-  modalKeyboard: { width: "100%" },
+  modalBackdropTapArea: {
+    flex: 1,
+  },
   modalCard: {
     backgroundColor: "#FFFFFF",
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
     paddingHorizontal: 22,
-    paddingTop: 22,
-    paddingBottom: Platform.OS === "ios" ? 38 : 26,
-    maxHeight: "90%",
+    paddingTop: 12,
+    paddingBottom: Platform.OS === "ios" ? 36 : 24,
+    maxHeight: "88%",
+    width: "100%",
   },
   modalFormScroll: {
-    maxHeight: 520,
+    flexShrink: 1,
+  },
+  modalFormScrollContent: {
+    paddingBottom: 8,
+  },
+  modalBottomSticky: {
+    paddingTop: 12,
+    backgroundColor: "#FFFFFF",
   },
   modalHeader: {
     flexDirection: "row",
