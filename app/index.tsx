@@ -25,6 +25,7 @@ export type Habit = {
   color: string;
   completedDates: string[];
   createdAt: string;
+  days?: string[]; // e.g. ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"]
 };
 
 const STORAGE_KEY = "@habit-tracker-basic/habits";
@@ -39,6 +40,19 @@ const ICONS: (keyof typeof Ionicons.glyphMap)[] = [
   "walk-outline",
   "heart-outline",
 ];
+
+const ALL_WEEK_DAYS = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"];
+const WEEKDAYS = ["MON", "TUE", "WED", "THU", "FRI"];
+const WEEKENDS = ["SAT", "SUN"];
+const DAY_DISPLAY_NAMES: Record<string, string> = {
+  MON: "M",
+  TUE: "T",
+  WED: "W",
+  THU: "T",
+  FRI: "F",
+  SAT: "S",
+  SUN: "S",
+};
 
 function dateToKey(date = new Date()): string {
   const year = date.getFullYear();
@@ -55,6 +69,14 @@ function formatPrettyDate(dateKeyString: string): string {
     month: "long",
     day: "numeric",
   });
+}
+
+function getDayOfWeekShort(dateKeyString: string): string {
+  const [y, m, d] = dateKeyString.split("-").map(Number);
+  return new Date(y, m - 1, d)
+    .toLocaleDateString("en-US", { weekday: "short" })
+    .toUpperCase()
+    .slice(0, 3);
 }
 
 // Generate the 7 days strip centered around reference date
@@ -85,6 +107,7 @@ export default function HomeScreen() {
   const [habitSubtitle, setHabitSubtitle] = useState("");
   const [selectedIcon, setSelectedIcon] = useState<(typeof ICONS)[number]>("book-outline");
   const [selectedColor, setSelectedColor] = useState(COLORS[0]);
+  const [selectedDays, setSelectedDays] = useState<string[]>(ALL_WEEK_DAYS);
   const [editingId, setEditingId] = useState<string | null>(null);
 
   // Action Menu State (Edit / Delete)
@@ -133,6 +156,7 @@ export default function HomeScreen() {
         color: "#6657E8",
         completedDates: [todayKey],
         createdAt: todayKey,
+        days: ALL_WEEK_DAYS,
       },
       {
         id: "sample-2",
@@ -142,6 +166,7 @@ export default function HomeScreen() {
         color: "#F39A5A",
         completedDates: [todayKey],
         createdAt: todayKey,
+        days: ALL_WEEK_DAYS,
       },
       {
         id: "sample-3",
@@ -151,6 +176,7 @@ export default function HomeScreen() {
         color: "#2FAF8F",
         completedDates: [],
         createdAt: todayKey,
+        days: ALL_WEEK_DAYS,
       },
       {
         id: "sample-4",
@@ -160,6 +186,7 @@ export default function HomeScreen() {
         color: "#4B91E2",
         completedDates: [],
         createdAt: todayKey,
+        days: ALL_WEEK_DAYS,
       },
     ];
     setHabits(samples);
@@ -171,12 +198,31 @@ export default function HomeScreen() {
     AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(habits)).catch(() => {});
   }, [habits, loaded]);
 
+  // FILTER HABITS STRICTLY ACCORDING TO THE SELECTED DATE
+  const activeHabitsForDate = useMemo(() => {
+    const currentDayOfWeek = getDayOfWeekShort(selectedDate);
+
+    return habits.filter((h) => {
+      // 1. Must be created on or before the selected date
+      if (h.createdAt && h.createdAt > selectedDate) {
+        return false;
+      }
+      // 2. Must be scheduled on this day of week (MON, TUE, WED, etc.)
+      if (h.days && h.days.length > 0) {
+        return h.days.includes(currentDayOfWeek);
+      }
+      return true; // default to everyday if no specific days set
+    });
+  }, [habits, selectedDate]);
+
   // Progress for the currently selected date
   const completedCount = useMemo(
-    () => habits.filter((h) => h.completedDates.includes(selectedDate)).length,
-    [habits, selectedDate]
+    () => activeHabitsForDate.filter((h) => h.completedDates.includes(selectedDate)).length,
+    [activeHabitsForDate, selectedDate]
   );
-  const progressRatio = habits.length ? completedCount / habits.length : 0;
+  const progressRatio = activeHabitsForDate.length
+    ? completedCount / activeHabitsForDate.length
+    : 0;
 
   // Toggle habit completion for selected date
   function toggleHabit(habit: Habit) {
@@ -201,6 +247,7 @@ export default function HomeScreen() {
     setHabitSubtitle("");
     setSelectedIcon("book-outline");
     setSelectedColor(COLORS[habits.length % COLORS.length]);
+    setSelectedDays(ALL_WEEK_DAYS);
     setModalVisible(true);
   }
 
@@ -211,7 +258,20 @@ export default function HomeScreen() {
     setHabitSubtitle(habit.subtitle || "");
     setSelectedIcon(habit.icon);
     setSelectedColor(habit.color);
+    setSelectedDays(habit.days && habit.days.length > 0 ? habit.days : ALL_WEEK_DAYS);
     setModalVisible(true);
+  }
+
+  // Toggle day in form
+  function toggleFormDay(day: string) {
+    setSelectedDays((prev) => {
+      if (prev.includes(day)) {
+        if (prev.length === 1) return prev; // Keep at least one day
+        return prev.filter((d) => d !== day);
+      } else {
+        return [...prev, day];
+      }
+    });
   }
 
   // Save Habit
@@ -236,6 +296,7 @@ export default function HomeScreen() {
                 subtitle: habitSubtitle.trim() || undefined,
                 icon: selectedIcon,
                 color: selectedColor,
+                days: selectedDays,
               }
             : h
         )
@@ -248,9 +309,10 @@ export default function HomeScreen() {
         icon: selectedIcon,
         color: selectedColor,
         completedDates: [],
-        createdAt: selectedDate,
+        createdAt: selectedDate, // Start tracking from the active selected date
+        days: selectedDays,
       };
-      setHabits((current) => [newHabit, ...current]);
+      setHabits((current) => [...current, newHabit]);
     }
     setModalVisible(false);
   }
@@ -384,20 +446,22 @@ export default function HomeScreen() {
             })}
           </View>
 
-          {/* RICH PURPLE PROGRESS CARD */}
+          {/* RICH PURPLE PROGRESS CARD ACCORDING TO DATE */}
           <View style={styles.progressCard}>
             <View style={styles.progressTop}>
               <View style={styles.progressTextWrap}>
-                <Text style={styles.progressEyebrow}>DAILY PROGRESS</Text>
+                <Text style={styles.progressEyebrow}>
+                  {selectedDate === todayKey ? "TODAY'S PROGRESS" : "DAY PROGRESS"}
+                </Text>
                 <Text style={styles.progressTitle}>
-                  {habits.length === 0
-                    ? "Start with one habit"
-                    : completedCount === habits.length
+                  {activeHabitsForDate.length === 0
+                    ? "No habits scheduled"
+                    : completedCount === activeHabitsForDate.length
                     ? "All done. Well done!"
                     : "Keep your momentum"}
                 </Text>
                 <Text style={styles.progressSubtitle}>
-                  {completedCount} of {habits.length} habits completed
+                  {completedCount} of {activeHabitsForDate.length} habits completed for this day
                 </Text>
               </View>
               <View style={styles.progressCircle}>
@@ -420,10 +484,10 @@ export default function HomeScreen() {
           <View style={styles.sectionRow}>
             <View>
               <Text style={styles.sectionTitle}>
-                {selectedDate === todayKey ? "Today's habits" : "Habits on this day"}
+                {selectedDate === todayKey ? "Today's habits" : "Habits on this date"}
               </Text>
               <Text style={styles.sectionSubtitle}>
-                Build consistency one check at a time.
+                Showing habits scheduled for {getDayOfWeekShort(selectedDate)}
               </Text>
             </View>
             <TouchableOpacity
@@ -436,23 +500,23 @@ export default function HomeScreen() {
             </TouchableOpacity>
           </View>
 
-          {/* HABITS LIST */}
-          {habits.length === 0 ? (
+          {/* HABITS LIST ACCORDING TO SELECTED DATE */}
+          {activeHabitsForDate.length === 0 ? (
             <View style={styles.emptyCard}>
               <View style={styles.emptyIcon}>
-                <Ionicons name="sparkles-outline" size={28} color="#6657E8" />
+                <Ionicons name="calendar-outline" size={28} color="#6657E8" />
               </View>
-              <Text style={styles.emptyTitle}>Create your first habit</Text>
+              <Text style={styles.emptyTitle}>No habits for this date</Text>
               <Text style={styles.emptyText}>
-                Start small: read 10 pages, walk for 15 minutes, or drink water.
+                No habits are scheduled for {formatPrettyDate(selectedDate)}. Tap below to add a habit!
               </Text>
               <TouchableOpacity style={styles.emptyButton} onPress={openAdd}>
-                <Text style={styles.emptyButtonText}>+ Create a habit</Text>
+                <Text style={styles.emptyButtonText}>+ Add a habit for this date</Text>
               </TouchableOpacity>
             </View>
           ) : (
             <View style={styles.habitList}>
-              {habits.map((item) => {
+              {activeHabitsForDate.map((item) => {
                 const isDone = item.completedDates.includes(selectedDate);
                 return (
                   <View
@@ -480,7 +544,7 @@ export default function HomeScreen() {
                       </Text>
                       <Text style={styles.habitStatus}>
                         {isDone
-                          ? "Completed"
+                          ? "Completed on this day"
                           : item.subtitle
                           ? item.subtitle
                           : "Tap to mark complete"}
@@ -536,7 +600,7 @@ export default function HomeScreen() {
             <View style={styles.tipContent}>
               <Text style={styles.tipTitle}>Tiny tip</Text>
               <Text style={styles.tipText}>
-                Make it easy to start. Five minutes is better than waiting for the perfect moment.
+                Consistency beats intensity. Checking off one habit every day builds lifetime momentum.
               </Text>
             </View>
           </View>
@@ -564,7 +628,7 @@ export default function HomeScreen() {
                     {editingId ? "Edit habit" : "New habit"}
                   </Text>
                   <Text style={styles.modalSubtitle}>
-                    Choose something you want to do daily.
+                    Choose days and settings for your habit.
                   </Text>
                 </View>
                 <TouchableOpacity
@@ -575,73 +639,165 @@ export default function HomeScreen() {
                 </TouchableOpacity>
               </View>
 
-              <Text style={styles.inputLabel}>HABIT NAME</Text>
-              <TextInput
-                style={styles.nameInput}
-                value={habitName}
-                onChangeText={setHabitName}
-                placeholder="e.g. Read for 10 minutes"
-                placeholderTextColor="#9A9FB1"
-                maxLength={50}
-                autoFocus
-                returnKeyType="done"
-              />
+              <ScrollView showsVerticalScrollIndicator={false} style={styles.modalFormScroll}>
+                <Text style={styles.inputLabel}>HABIT NAME</Text>
+                <TextInput
+                  style={styles.nameInput}
+                  value={habitName}
+                  onChangeText={setHabitName}
+                  placeholder="e.g. Read for 10 minutes"
+                  placeholderTextColor="#9A9FB1"
+                  maxLength={50}
+                  autoFocus
+                  returnKeyType="done"
+                />
 
-              <Text style={styles.inputLabel}>FREQUENCY / SUBTITLE</Text>
-              <TextInput
-                style={styles.nameInput}
-                value={habitSubtitle}
-                onChangeText={setHabitSubtitle}
-                placeholder="e.g. Everyday at 8:30 am, 10 times"
-                placeholderTextColor="#9A9FB1"
-                maxLength={50}
-              />
+                <Text style={styles.inputLabel}>FREQUENCY / SUBTITLE</Text>
+                <TextInput
+                  style={styles.nameInput}
+                  value={habitSubtitle}
+                  onChangeText={setHabitSubtitle}
+                  placeholder="e.g. Everyday at 8:30 am, 10 times"
+                  placeholderTextColor="#9A9FB1"
+                  maxLength={50}
+                />
 
-              <Text style={styles.inputLabel}>PICK AN ICON</Text>
-              <View style={styles.iconGrid}>
-                {ICONS.map((icon) => (
+                {/* SCHEDULE REPEAT DAYS ACCORDING TO DATE */}
+                <Text style={styles.inputLabel}>SCHEDULE REPEAT DAYS</Text>
+                <View style={styles.repeatPresetRow}>
                   <TouchableOpacity
-                    key={icon}
                     style={[
-                      styles.iconChoice,
-                      selectedIcon === icon && styles.iconChoiceSelected,
-                      selectedIcon === icon && { borderColor: selectedColor },
+                      styles.repeatPresetChip,
+                      selectedDays.length === 7 && styles.repeatPresetChipActive,
                     ]}
-                    onPress={() => setSelectedIcon(icon)}
+                    onPress={() => setSelectedDays(ALL_WEEK_DAYS)}
                   >
-                    <Ionicons
-                      name={icon}
-                      size={22}
-                      color={selectedIcon === icon ? selectedColor : "#777D93"}
-                    />
+                    <Text
+                      style={[
+                        styles.repeatPresetText,
+                        selectedDays.length === 7 && styles.repeatPresetTextActive,
+                      ]}
+                    >
+                      Every day
+                    </Text>
                   </TouchableOpacity>
-                ))}
-              </View>
 
-              <Text style={styles.inputLabel}>PICK A COLOR</Text>
-              <View style={styles.colorRow}>
-                {COLORS.map((color) => (
                   <TouchableOpacity
-                    key={color}
                     style={[
-                      styles.colorChoice,
-                      { backgroundColor: color },
-                      selectedColor === color && styles.colorChoiceSelected,
+                      styles.repeatPresetChip,
+                      selectedDays.length === 5 &&
+                        WEEKDAYS.every((d) => selectedDays.includes(d)) &&
+                        styles.repeatPresetChipActive,
                     ]}
-                    onPress={() => setSelectedColor(color)}
-                    accessibilityLabel={`Choose color ${color}`}
-                  />
-                ))}
-              </View>
+                    onPress={() => setSelectedDays(WEEKDAYS)}
+                  >
+                    <Text
+                      style={[
+                        styles.repeatPresetText,
+                        selectedDays.length === 5 &&
+                          WEEKDAYS.every((d) => selectedDays.includes(d)) &&
+                          styles.repeatPresetTextActive,
+                      ]}
+                    >
+                      Weekdays
+                    </Text>
+                  </TouchableOpacity>
 
-              <TouchableOpacity
-                style={[styles.saveButton, { backgroundColor: selectedColor }]}
-                onPress={saveHabit}
-              >
-                <Text style={styles.saveButtonText}>
-                  {editingId ? "Save changes" : "Create habit"}
-                </Text>
-              </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[
+                      styles.repeatPresetChip,
+                      selectedDays.length === 2 &&
+                        WEEKENDS.every((d) => selectedDays.includes(d)) &&
+                        styles.repeatPresetChipActive,
+                    ]}
+                    onPress={() => setSelectedDays(WEEKENDS)}
+                  >
+                    <Text
+                      style={[
+                        styles.repeatPresetText,
+                        selectedDays.length === 2 &&
+                          WEEKENDS.every((d) => selectedDays.includes(d)) &&
+                          styles.repeatPresetTextActive,
+                      ]}
+                    >
+                      Weekends
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+
+                {/* Individual Days Toggle */}
+                <View style={styles.daysPickerRow}>
+                  {ALL_WEEK_DAYS.map((day) => {
+                    const isPicked = selectedDays.includes(day);
+                    return (
+                      <TouchableOpacity
+                        key={day}
+                        style={[
+                          styles.dayPickerCircle,
+                          isPicked && styles.dayPickerCircleActive,
+                          isPicked && { backgroundColor: selectedColor },
+                        ]}
+                        onPress={() => toggleFormDay(day)}
+                      >
+                        <Text
+                          style={[
+                            styles.dayPickerText,
+                            isPicked && styles.dayPickerTextActive,
+                          ]}
+                        >
+                          {DAY_DISPLAY_NAMES[day]}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+
+                <Text style={styles.inputLabel}>PICK AN ICON</Text>
+                <View style={styles.iconGrid}>
+                  {ICONS.map((icon) => (
+                    <TouchableOpacity
+                      key={icon}
+                      style={[
+                        styles.iconChoice,
+                        selectedIcon === icon && styles.iconChoiceSelected,
+                        selectedIcon === icon && { borderColor: selectedColor },
+                      ]}
+                      onPress={() => setSelectedIcon(icon)}
+                    >
+                      <Ionicons
+                        name={icon}
+                        size={22}
+                        color={selectedIcon === icon ? selectedColor : "#777D93"}
+                      />
+                    </TouchableOpacity>
+                  ))}
+                </View>
+
+                <Text style={styles.inputLabel}>PICK A COLOR</Text>
+                <View style={styles.colorRow}>
+                  {COLORS.map((color) => (
+                    <TouchableOpacity
+                      key={color}
+                      style={[
+                        styles.colorChoice,
+                        { backgroundColor: color },
+                        selectedColor === color && styles.colorChoiceSelected,
+                      ]}
+                      onPress={() => setSelectedColor(color)}
+                      accessibilityLabel={`Choose color ${color}`}
+                    />
+                  ))}
+                </View>
+
+                <TouchableOpacity
+                  style={[styles.saveButton, { backgroundColor: selectedColor }]}
+                  onPress={saveHabit}
+                >
+                  <Text style={styles.saveButtonText}>
+                    {editingId ? "Save changes" : "Create habit"}
+                  </Text>
+                </TouchableOpacity>
+              </ScrollView>
             </View>
           </KeyboardAvoidingView>
         </View>
@@ -1144,12 +1300,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 22,
     paddingTop: 22,
     paddingBottom: Platform.OS === "ios" ? 38 : 26,
+    maxHeight: "90%",
+  },
+  modalFormScroll: {
+    maxHeight: 520,
   },
   modalHeader: {
     flexDirection: "row",
     alignItems: "flex-start",
     justifyContent: "space-between",
-    marginBottom: 20,
+    marginBottom: 16,
   },
   modalTitle: { color: "#252840", fontSize: 22, fontWeight: "800", marginBottom: 4 },
   modalSubtitle: { color: "#8C91A5", fontSize: 12 },
@@ -1167,7 +1327,7 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     letterSpacing: 1.2,
     marginBottom: 8,
-    marginTop: 4,
+    marginTop: 10,
   },
   nameInput: {
     borderWidth: 1,
@@ -1177,9 +1337,58 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     color: "#282B43",
     fontSize: 14,
-    marginBottom: 16,
+    marginBottom: 6,
   },
-  iconGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginBottom: 18 },
+
+  /* REPEAT DAYS SELECTOR */
+  repeatPresetRow: {
+    flexDirection: "row",
+    gap: 8,
+    marginBottom: 10,
+  },
+  repeatPresetChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 10,
+    backgroundColor: "#F2F3F8",
+  },
+  repeatPresetChipActive: {
+    backgroundColor: "#6657E8",
+  },
+  repeatPresetText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#6B7085",
+  },
+  repeatPresetTextActive: {
+    color: "#FFFFFF",
+  },
+  daysPickerRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginBottom: 8,
+  },
+  dayPickerCircle: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: "#F2F3F8",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  dayPickerCircleActive: {
+    backgroundColor: "#6657E8",
+  },
+  dayPickerText: {
+    fontSize: 12,
+    fontWeight: "800",
+    color: "#656B82",
+  },
+  dayPickerTextActive: {
+    color: "#FFFFFF",
+  },
+
+  iconGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginBottom: 10 },
   iconChoice: {
     width: 42,
     height: 42,
@@ -1195,7 +1404,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 13,
-    marginBottom: 24,
+    marginBottom: 20,
   },
   colorChoice: {
     width: 29,
@@ -1209,6 +1418,7 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     paddingVertical: 14,
     alignItems: "center",
+    marginBottom: 15,
   },
   saveButtonText: { color: "#FFFFFF", fontSize: 14, fontWeight: "800" },
 
